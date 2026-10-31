@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4fbfc" />
+    <meta name="description" content="Area operator sebagai pemilik SiteNexs.com untuk mengelola sistem dan akun admin." />
+    <title>Operator | SiteNexs Presensi</title>
+    <link rel="icon" type="image/png" href="sitenexs-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-layout">
+      <a class="brand auth-brand" href="login.html" aria-label="SiteNexs">
+        <span class="brand-mark"><img src="sitenexs-icon.png" alt="" /></span>
+        <span class="brand-word">site<span>nexs</span></span>
+      </a>
+      <section class="auth-card auth-card-wide" aria-labelledby="operatorTitle">
+        <div class="auth-icon owner-icon"><i class="fa-solid fa-user-shield"></i></div>
+        <span class="auth-kicker">DASHBOARD OPERATOR · PEMILIK SITENEXS.COM</span>
+        <h1 id="operatorTitle">Pengawasan workspace</h1>
+        <p class="auth-description">Pemilik SiteNexs.com memegang kendali tertinggi workspace: mengelola akun admin dan karyawan serta mengawasi seluruh aktivitas.</p>
+        <div class="auth-notice" role="status"><i class="fa-solid fa-flask"></i><span>Statistik dan akun berikut adalah data demo lokal, bukan data tersimpan di server.</span></div>
+        <div class="auth-dashboard-account account-hero" aria-label="Profil operator"><span class="account-hero-avatar avatar" data-account-avatar><img alt="" hidden /><span data-avatar-initials>PS</span></span><span class="auth-dashboard-account-copy account-hero-copy"><strong data-account-name>Pemilik SiteNexs</strong><small data-account-role>Operator</small></span><button class="button button-outline" type="button" data-open-account-settings><i class="fa-solid fa-gear"></i> Pengaturan akun</button><a class="button button-outline dashboard-logout" href="login.html" data-demo-logout><i class="fa-solid fa-arrow-right-from-bracket"></i> Keluar akun</a></div>
+        <section class="auth-stats-grid" aria-label="Statistik akun workspace">
+          <article class="auth-stat-card"><span>Admin</span><strong data-admin-count>1</strong><small>akun terdaftar</small></article>
+          <article class="auth-stat-card"><span>Karyawan</span><strong data-employee-count>9</strong><small>akun terdaftar</small></article>
+        </section>
+        <section class="auth-scope auth-management-section" aria-labelledby="operatorManagementTitle">
+          <h2 id="operatorManagementTitle"><i class="fa-solid fa-sliders"></i> Kendali operator</h2>
+          <p>Operator dapat menambahkan admin dan karyawan. Admin dan karyawan hanya dapat menambahkan karyawan.</p>
+          <p class="directory-demo-note">Akun admin baru tercatat di daftar demo ini; pembuatan akun login terpisah memerlukan backend.</p>
+          <form class="directory-add-form" data-add-admin-form>
+            <label class="form-label"><span>Nama admin baru</span><input name="adminName" type="text" maxlength="60" placeholder="Nama pemilik perusahaan" required /></label>
+            <label class="form-label"><span>Email admin</span><input name="adminEmail" type="email" placeholder="admin@perusahaan.com" required /></label>
+            <button class="button button-outline" type="submit"><i class="fa-solid fa-user-plus"></i> Tambah admin</button>
+            <p class="auth-status directory-form-status" data-directory-status aria-live="polite"></p>
+          </form>
+          <form class="directory-add-form" data-add-employee-form>
+            <label class="form-label"><span>Nama karyawan</span><input name="employeeName" type="text" maxlength="60" placeholder="Nama lengkap" required /></label>
+            <label class="form-label"><span>ID karyawan</span><input name="employeeId" type="text" maxlength="40" placeholder="SNX-2026-001" required /></label>
+            <label class="form-label"><span>Jabatan / divisi</span><input name="employeePosition" type="text" maxlength="60" placeholder="Contoh: Engineering" required /></label>
+            <label class="form-label full-field"><span>Admin pemilik karyawan</span><select name="employeeOwner" required data-admin-selector></select></label>
+            <button class="button button-primary" type="submit"><i class="fa-solid fa-user-plus"></i> Tambah karyawan</button>
+            <p class="auth-status directory-form-status" data-directory-status aria-live="polite"></p>
+          </form>
+        </section>
+        <section class="auth-scope auth-workspace-panel" aria-labelledby="adminAccountsTitle" data-admin-workspace-panel>
+          <div class="workspace-panel-heading"><div><h2 id="adminAccountsTitle"><i class="fa-solid fa-building-user"></i> Perusahaan per admin</h2><p>Setiap kartu menampilkan karyawan milik admin yang bersangkutan.</p></div><div class="workspace-slider-controls"><button class="icon-button" type="button" data-scroll-admins="-1" aria-label="Geser daftar admin ke kiri"><i class="fa-solid fa-chevron-left"></i></button><button class="icon-button" type="button" data-scroll-admins="1" aria-label="Geser daftar admin ke kanan"><i class="fa-solid fa-chevron-right"></i></button></div></div>
+          <div class="workspace-admin-slider" data-admin-workspaces tabindex="0" aria-label="Daftar perusahaan admin"></div>
+        </section>
+        <section class="auth-scope gps-dashboard" id="gpsDashboardOperator" data-gps-dashboard="operator" aria-label="Pengawasan GPS workspace"></section>
+        <dialog class="modal-dialog account-settings-dialog" id="accountSettingsDialog" aria-labelledby="accountSettingsTitle">
+          <div class="modal-card">
+            <div class="modal-header"><div><span class="modal-kicker">PREFERENSI PROFIL</span><h2 id="accountSettingsTitle">Pengaturan akun</h2><p>Perubahan hanya tersimpan di browser perangkat ini.</p></div><button class="icon-button modal-close" type="button" data-close-settings aria-label="Tutup pengaturan"><i class="fa-solid fa-xmark"></i></button></div>
+            <form data-account-settings-form>
+              <div class="settings-profile-preview"><span class="settings-avatar"><img data-profile-preview alt="Pratinjau foto profil" hidden /><span data-profile-initials>PS</span></span><strong data-settings-account-label>Pemilik SiteNexs</strong></div>
+              <label class="form-label"><span>Nama akun</span><input name="accountName" type="text" maxlength="60" autocomplete="name" required /></label>
+              <label class="form-label settings-file-field"><span>Foto profil</span><input name="profilePhoto" type="file" accept="image/*" /><small>Format gambar, maksimal 1 MB.</small></label>
+              <div class="settings-password-section"><strong>Ubah password demo</strong><small>Password baru berlaku untuk semua role demo.</small>
+                <label class="form-label"><span>Password saat ini</span><input name="currentPassword" type="password" autocomplete="current-password" /></label>
+                <label class="form-label"><span>Password baru</span><input name="newPassword" type="password" autocomplete="new-password" minlength="8" /></label>
+                <label class="form-label"><span>Konfirmasi password baru</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" /></label>
+              </div>
+              <p class="auth-status" data-settings-status aria-live="polite"></p>
+              <div class="modal-actions"><button class="button button-quiet" type="button" data-close-settings>Batal</button><button class="button button-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan pengaturan</button></div>
+            </form>
+          </div>
+        </dialog>
+      </section>
+      <p class="auth-copyright">© 2026 SiteNexs Workspace</p>
+    </main>
+    <script src="demo-account.js"></script>
+    <script src="workspace-directory.js"></script>
+    <script src="gps-attendance.js"></script>
+    <script src="auth-pages.js"></script>
+  </body>
+</html>
