@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4fbfc" />
+    <meta name="description" content="Masuk ke SiteNexs Presensi." />
+    <title>Masuk | SiteNexs Presensi</title>
+    <link rel="icon" type="image/png" href="sitenexs-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-layout">
+      <a class="brand auth-brand" href="login.html" aria-label="SiteNexs">
+        <span class="brand-mark"><img src="sitenexs-icon.png" alt="" /></span>
+        <span class="brand-word">site<span>nexs</span></span>
+      </a>
+      <section class="auth-card" aria-labelledby="loginTitle">
+        <div class="auth-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <span class="auth-kicker">WORKSPACE PRESENSI</span>
+        <h1 id="loginTitle">Selamat datang</h1>
+        <p class="auth-description">Masuk menggunakan email terdaftar dan password.</p>
+        <div class="auth-notice" role="status"><i class="fa-solid fa-triangle-exclamation"></i><span>Akun yang dibuat dari dashboard tersimpan di browser ini saja. Login demo ini belum memakai Firebase atau autentikasi server.</span></div>
+        <form class="auth-form" data-auth-form="login">
+          <label class="auth-field"><span>Email</span><div class="auth-input-wrap"><i class="fa-regular fa-envelope"></i><input name="identifier" type="email" autocomplete="username" placeholder="nama@email.com" required /></div></label>
+          <label class="auth-field"><span>Password</span><div class="auth-input-wrap"><i class="fa-solid fa-key"></i><input name="password" type="password" autocomplete="current-password" placeholder="Masukkan password" required /></div></label>
+          <button class="auth-submit" type="submit"><i class="fa-solid fa-arrow-right-to-bracket"></i> Masuk</button>
+          <p class="auth-status" data-auth-status aria-live="polite"></p>
+        </form>
+        <button class="forgot-password-link" id="forgotPasswordButton" type="button">Lupa password?</button>
+        <div class="auth-footnote"><i class="fa-solid fa-circle-info"></i><span>Akun ini hanya untuk demo lokal. Data akun dan karyawan tidak tersimpan di server.</span></div>
+      </section>
+      <dialog class="modal-dialog password-reset-dialog" id="passwordResetDialog" aria-labelledby="passwordResetTitle">
+        <div class="modal-card">
+          <div class="modal-header"><div><span class="modal-kicker">PEMULIHAN AKUN</span><h2 id="passwordResetTitle">Lupa password?</h2><p>Verifikasi email yang terdaftar, lalu buat password baru.</p></div><button class="icon-button modal-close" type="button" data-close-password-reset aria-label="Tutup pemulihan password"><i class="fa-solid fa-xmark"></i></button></div>
+          <div class="auth-notice password-reset-notice" role="status"><i class="fa-solid fa-triangle-exclamation"></i><span>Mode demo frontend: email tidak benar-benar dikirim. Kode verifikasi ditampilkan di halaman ini. Integrasi email/Firebase diperlukan untuk penggunaan produksi.</span></div>
+          <form id="passwordResetForm" class="password-reset-form" novalidate>
+            <label class="auth-field"><span>Email terdaftar</span><div class="auth-input-wrap"><i class="fa-regular fa-envelope"></i><input id="resetEmail" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required /></div></label>
+            <button class="button button-primary" id="requestResetCodeButton" type="submit"><i class="fa-regular fa-paper-plane"></i> Buat kode verifikasi</button>
+            <div class="reset-verification-step is-hidden" id="resetVerificationStep">
+              <div class="reset-demo-code" id="resetDemoCodeNotice" role="status"><i class="fa-solid fa-key"></i><span>Kode demo: <strong id="resetDemoCode"></strong></span></div>
+              <label class="auth-field"><span>Kode verifikasi</span><div class="auth-input-wrap"><i class="fa-solid fa-shield-halved"></i><input id="resetVerificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="6 digit kode" /></div></label>
+              <button class="button button-outline" id="verifyResetCodeButton" type="button"><i class="fa-solid fa-check"></i> Verifikasi email</button>
+            </div>
+            <div class="reset-password-step is-hidden" id="resetPasswordStep">
+              <label class="auth-field"><span>Password baru (minimal 8 karakter)</span><div class="auth-input-wrap"><i class="fa-solid fa-key"></i><input id="resetNewPassword" type="password" autocomplete="new-password" minlength="8" /></div></label>
+              <label class="auth-field"><span>Ulangi password baru</span><div class="auth-input-wrap"><i class="fa-solid fa-key"></i><input id="resetConfirmPassword" type="password" autocomplete="new-password" minlength="8" /></div></label>
+              <button class="auth-submit" id="saveResetPasswordButton" type="button"><i class="fa-solid fa-floppy-disk"></i> Simpan password baru</button>
+            </div>
+            <p class="auth-status" id="passwordResetStatus" aria-live="polite"></p>
+          </form>
+        </div>
+      </dialog>
+      <dialog class="modal-dialog account-settings-dialog" id="accountSettingsDialog" aria-labelledby="accountSettingsTitle">
+        <div class="modal-card">
+          <div class="modal-header"><div><span class="modal-kicker">PREFERENSI PROFIL</span><h2 id="accountSettingsTitle">Pengaturan akun demo</h2><p>Pengaturan hanya tersimpan di browser ini.</p></div><button class="icon-button modal-close" type="button" data-close-settings aria-label="Tutup pengaturan"><i class="fa-solid fa-xmark"></i></button></div>
+          <form data-account-settings-form>
+            <div class="settings-profile-preview"><span class="settings-avatar"><img data-profile-preview alt="Pratinjau foto profil" hidden /><span data-profile-initials>AY</span></span><strong data-settings-account-label>Ayu Ramadhani</strong></div>
+            <label class="form-label"><span>Nama akun</span><input name="accountName" type="text" maxlength="60" autocomplete="name" required /></label>
+            <label class="form-label settings-file-field"><span>Foto profil</span><input name="profilePhoto" type="file" accept="image/*" /><small>Format gambar, maksimal 1 MB.</small></label>
+            <div class="settings-password-section"><strong>Ubah password demo</strong><small>Password baru berlaku untuk akun demo.</small>
+              <label class="form-label"><span>Password saat ini</span><input name="currentPassword" type="password" autocomplete="current-password" /></label>
+              <label class="form-label"><span>Password baru</span><input name="newPassword" type="password" autocomplete="new-password" minlength="8" /></label>
+              <label class="form-label"><span>Konfirmasi password baru</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" /></label>
+            </div>
+            <p class="auth-status" data-settings-status aria-live="polite"></p>
+            <div class="modal-actions"><button class="forgot-password-link settings-forgot-password" type="button" data-open-password-reset>Lupa password?</button><button class="button button-quiet" type="button" data-close-settings>Batal</button><button class="button button-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan pengaturan</button></div>
+          </form>
+        </div>
+      </dialog>
+      <p class="auth-copyright">© 2026 SiteNexs Workspace</p>
+    </main>
+    <script src="demo-account.js"></script>
+    <script src="workspace-directory.js"></script>
+    <script src="auth-pages.js"></script>
+  </body>
+</html>
