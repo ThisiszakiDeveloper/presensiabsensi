@@ -139,6 +139,9 @@ let adminStream = null;
 let employeeStream = null;
 let capturedFace = false;
 let faceSample = null;
+let faceDescriptor = null;
+let faceRecognitionModelsPromise = null;
+const faceMatchThreshold = 0.52;
 let currentFile = null;
 let leaveSubmissionPending = false;
 let scanTimeout = null;
@@ -1559,6 +1562,53 @@ function waitForVideoFrame(video) {
   });
 }
 
+function loadFaceRecognitionModels() {
+  if (!window.faceapi) throw new Error("Library pengenalan wajah lokal tidak tersedia.");
+  if (!faceRecognitionModelsPromise) {
+    faceRecognitionModelsPromise = Promise.all([
+      window.faceapi.nets.tinyFaceDetector.loadFromUri("face-models"),
+      window.faceapi.nets.faceLandmark68TinyNet.loadFromUri("face-models"),
+      window.faceapi.nets.faceRecognitionNet.loadFromUri("face-models"),
+    ]).catch((error) => {
+      faceRecognitionModelsPromise = null;
+      throw new Error(`Model pengenalan wajah gagal dimuat: ${error.message}`);
+    });
+  }
+  return faceRecognitionModelsPromise;
+}
+
+async function extractFaceDescriptor(source) {
+  await loadFaceRecognitionModels();
+  const detections = await window.faceapi
+    .detectAllFaces(source, new window.faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+    .withFaceLandmarks(true)
+    .withFaceDescriptors();
+  if (detections.length === 0) throw new Error("Wajah tidak terdeteksi. Posisikan wajah di tengah dan gunakan pencahayaan yang cukup.");
+  if (detections.length > 1) throw new Error("Terdeteksi lebih dari satu wajah. Pastikan hanya satu orang di dalam bingkai.");
+  return Array.from(detections[0].descriptor);
+}
+
+function getFaceDescriptorDistance(first, second) {
+  if (!Array.isArray(first) || !Array.isArray(second) || first.length !== 128 || second.length !== 128) {
+    throw new Error("Data template wajah tidak valid.");
+  }
+  return Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0));
+}
+
+function findRegisteredFaceMatch(descriptor, excludedEmail = null) {
+  const ownerAdminId = document.getElementById("newEmployeeOwner")?.value || currentAdminId;
+  const employees = (window.SiteNexsDirectory?.getEmployees() || [])
+    .filter((employee) => employee.ownerAdminId === ownerAdminId);
+  return employees
+    .filter((employee) => employee.email !== excludedEmail
+      && Array.isArray(employee.faceDescriptor)
+      && employee.faceDescriptor.length === 128
+      && employee.faceDescriptor.every(Number.isFinite))
+    .map((employee) => ({ employee, distance: getFaceDescriptorDistance(descriptor, employee.faceDescriptor) }))
+    .filter((match) => match.distance <= faceMatchThreshold)
+    .sort((first, second) => first.distance - second.distance)[0] || null;
+}
+
 function employeeCameraHasFrame() {
   return Boolean(
     employeeStream
@@ -1616,14 +1666,19 @@ async function startCamera(kind) {
       if (error.name !== "OverconstrainedError" && error.name !== "ConstraintNotSatisfiedError") throw error;
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     }
+    if (isAdmin) {
+      stopStream(adminStream, adminVideo, stage);
+      adminStream = null;
+    } else {
+      stopStream(employeeStream, employeeVideo, stage);
+      employeeStream = null;
+    }
     video.srcObject = stream;
     await video.play();
     await waitForVideoFrame(video);
     if (isAdmin) {
-      stopStream(adminStream, adminVideo, stage);
       adminStream = stream;
     } else {
-      stopStream(employeeStream, employeeVideo, stage);
       employeeStream = stream;
     }
     stream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -1656,12 +1711,15 @@ async function startCamera(kind) {
   }
 }
 
-function captureFaceSample() {
+async function captureFaceSample() {
   if (!adminStream || !adminVideo.videoWidth || adminVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     showToast("Aktifkan kamera dan tunggu pratinjau wajah sebelum mengambil foto.", "warning");
     return;
   }
+  const captureButton = document.getElementById("captureFaceButton");
+  captureButton.disabled = true;
   try {
+    document.getElementById("enrollmentStatus").textContent = "Memeriksa wajah dan memuat model lokal...";
     const canvas = document.createElement("canvas");
     canvas.width = adminVideo.videoWidth;
     canvas.height = adminVideo.videoHeight;
@@ -1670,26 +1728,33 @@ function captureFaceSample() {
     context.drawImage(adminVideo, 0, 0, canvas.width, canvas.height);
     const sample = canvas.toDataURL("image/jpeg", .78);
     if (!sample.startsWith("data:image/")) throw new Error("Foto sampel wajah tidak berhasil dibuat.");
+    const descriptor = await extractFaceDescriptor(canvas);
+    const knownFace = findRegisteredFaceMatch(descriptor, editingEmployeeEmail);
+    if (knownFace) throw new Error(`Wajah sudah terdaftar pada ${knownFace.employee.name} (${knownFace.employee.email}).`);
     faceSample = sample;
+    faceDescriptor = descriptor;
     capturedFace = true;
     const preview = document.getElementById("enrollmentFacePreview");
     preview.src = sample;
     preview.classList.remove("is-hidden");
     const status = document.getElementById("enrollmentStatus");
-    status.textContent = "Foto sampel wajah berhasil diambil";
+    status.textContent = "Wajah terdeteksi dan belum terdaftar; template siap disimpan";
     status.style.color = "#259b7e";
-    document.getElementById("captureFaceButton").innerHTML = '<i class="fa-solid fa-check"></i> Ambil ulang foto';
-    showToast("Foto sampel wajah siap untuk registrasi.");
+    captureButton.innerHTML = '<i class="fa-solid fa-check"></i> Ambil ulang foto';
+    showToast("Template wajah berhasil dibuat di browser ini.");
   } catch (error) {
     capturedFace = false;
     faceSample = null;
+    faceDescriptor = null;
     const preview = document.getElementById("enrollmentFacePreview");
     preview.removeAttribute("src");
     preview.classList.add("is-hidden");
     const status = document.getElementById("enrollmentStatus");
-    status.textContent = "Foto sampel gagal diambil";
+    status.textContent = error.message || "Wajah tidak berhasil dikenali";
     status.style.color = "#c45e4e";
-    showToast(`Foto sampel wajah gagal diambil: ${error.message}`, "error");
+    showToast(`Registrasi wajah gagal: ${error.message}`, "error");
+  } finally {
+    captureButton.disabled = !adminStream;
   }
 }
 
@@ -1697,6 +1762,7 @@ function openEmployeeModal() {
   editingEmployeeEmail = null;
   capturedFace = false;
   faceSample = null;
+  faceDescriptor = null;
   document.getElementById("employeeForm").reset();
   document.getElementById("newEmployeeOwner").value = currentAdminId;
   document.getElementById("newEmployeeOwnerDisplay").value = window.SiteNexsDirectory.getAdmins()
@@ -1728,10 +1794,11 @@ function openEmployeeEditModal(email) {
   editingEmployeeEmail = email;
   capturedFace = false;
   faceSample = null;
+  faceDescriptor = null;
   const form = document.getElementById("employeeForm");
   form.reset();
   document.getElementById("employeeModalTitle").textContent = "Edit karyawan";
-  document.getElementById("employeeModalDescription").textContent = "Perbarui profil karyawan.";
+  document.getElementById("employeeModalDescription").textContent = "Perbarui profil atau daftarkan ulang wajah karyawan.";
   document.getElementById("employeeSubmitLabel").textContent = "Simpan perubahan";
   document.getElementById("newEmployeeName").value = employee.name;
   document.getElementById("newEmployeeEmail").value = employee.email || "";
@@ -1739,7 +1806,7 @@ function openEmployeeEditModal(email) {
   document.getElementById("newEmployeePassword").value = "";
   document.getElementById("newEmployeePassword").required = false;
   document.getElementById("employeePasswordField").classList.add("is-hidden");
-  document.getElementById("employeeEnrollmentBlock").classList.add("is-hidden");
+  document.getElementById("employeeEnrollmentBlock").classList.remove("is-hidden");
   document.getElementById("newEmployeeOwner").value = currentAdminId;
   document.getElementById("newEmployeeOwnerDisplay").value = window.SiteNexsDirectory.getAdmins()
     .find((admin) => admin.id === currentAdminId)?.name || "Workspace demo";
@@ -1748,6 +1815,20 @@ function openEmployeeEditModal(email) {
   divisionSelect.value = availableDivision ? employee.role : "custom";
   document.getElementById("customDivisionName").value = availableDivision ? "" : employee.role;
   document.getElementById("newEmployeeAccountRole").value = employee.accountRole === "admin" ? "admin" : "employee";
+  const preview = document.getElementById("enrollmentFacePreview");
+  if (typeof employee.faceSample === "string" && employee.faceSample.startsWith("data:image/")) {
+    preview.src = employee.faceSample;
+    preview.classList.remove("is-hidden");
+  } else {
+    preview.removeAttribute("src");
+    preview.classList.add("is-hidden");
+  }
+  const enrollmentStatus = document.getElementById("enrollmentStatus");
+  enrollmentStatus.textContent = Array.isArray(employee.faceDescriptor)
+    ? "Wajah sudah terdaftar; ambil ulang jika diperlukan"
+    : "Wajah belum terdaftar; wajib ambil sampel untuk mengaktifkan presensi";
+  enrollmentStatus.style.color = Array.isArray(employee.faceDescriptor) ? "#259b7e" : "#c45e4e";
+  document.getElementById("captureFaceButton").innerHTML = '<i class="fa-solid fa-camera-retro"></i> Ambil sampel wajah';
   updateCustomDivisionField();
   stopAdminCamera();
   employeeModal.showModal();
@@ -1842,10 +1923,10 @@ async function addEmployee(event) {
     const selectedDivision = document.getElementById("newEmployeeDivision").value;
     const role = selectedDivision === "custom" ? document.getElementById("customDivisionName").value.trim() : selectedDivision;
     const accountRole = document.getElementById("newEmployeeAccountRole").value;
-    if (!editingEmployeeEmail && (!capturedFace || !faceSample)) {
+    if (!editingEmployeeEmail && (!capturedFace || !faceSample || !faceDescriptor)) {
       document.getElementById("enrollmentStatus").textContent = "Foto wajah wajib diambil sebelum akun dibuat";
       document.getElementById("enrollmentStatus").style.color = "#c45e4e";
-      showToast("Aktifkan kamera dan ambil foto sampel wajah sebelum membuat akun.", "error");
+      showToast("Aktifkan kamera dan daftarkan wajah sebelum membuat akun.", "error");
       document.getElementById("adminCameraButton").focus();
       return;
     }
@@ -1858,14 +1939,27 @@ async function addEmployee(event) {
       return;
     }
     if (editingEmployeeEmail) {
-      window.SiteNexsDirectory.updateEmployee(editingEmployeeEmail, { name, email, role, ownerAdminId, accountRole });
+      const currentEmployee = window.SiteNexsDirectory.getEmployees().find((entry) => entry.email === editingEmployeeEmail);
+      if (!Array.isArray(currentEmployee?.faceDescriptor) && (!capturedFace || !faceDescriptor)) {
+        document.getElementById("enrollmentStatus").textContent = "Daftarkan wajah terlebih dahulu agar karyawan dapat presensi";
+        document.getElementById("enrollmentStatus").style.color = "#c45e4e";
+        showToast("Akun ini belum memiliki template wajah. Aktifkan kamera dan ambil sampel wajah.", "error");
+        document.getElementById("adminCameraButton").focus();
+        return;
+      }
+      const updates = { name, email, role, ownerAdminId, accountRole };
+      if (capturedFace && faceDescriptor && faceSample) {
+        updates.faceDescriptor = faceDescriptor;
+        updates.faceSample = faceSample;
+      }
+      window.SiteNexsDirectory.updateEmployee(editingEmployeeEmail, updates);
       editingEmployeeEmail = null;
       closeDialog("employeeModal");
       showToast(`${name} berhasil diperbarui.`);
       return;
     }
     const credentials = await window.SiteNexsDirectory.createEmployeeCredential(password);
-    window.SiteNexsDirectory.addEmployee({ name, email, role, ownerAdminId, accountRole, credentials, faceSample, status: "Hadir" });
+    window.SiteNexsDirectory.addEmployee({ name, email, role, ownerAdminId, accountRole, credentials, faceSample, faceDescriptor, status: "Hadir" });
     updateEmployeeTotal();
     renderAttendance();
     closeDialog("employeeModal");
@@ -2123,6 +2217,11 @@ async function performScan(useDemo = false) {
   let locationAssessment = { status: "gps-tidak-tersedia", distanceMeters: null, allowed: true, message: "GPS tidak tersedia pada halaman ini." };
 
   if (button.disabled) return;
+  if (!useDemo && !Array.isArray(employee?.faceDescriptor)) {
+    updateScanFeedback("error", "Wajah belum terdaftar", "Minta admin mendaftarkan sampel wajah untuk akun email ini.");
+    showToast("Presensi diblokir karena akun ini belum memiliki template wajah.", "warning");
+    return;
+  }
   if (!useDemo && !employeeStream) {
     const connected = await startCamera("employee");
     if (!connected) {
@@ -2145,6 +2244,24 @@ async function performScan(useDemo = false) {
       showToast(`Presensi belum dicatat: ${error.message}`, "error");
       return;
     }
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memeriksa wajah';
+    updateScanFeedback("is-busy", "Memeriksa wajah", "Template akun dibandingkan secara lokal di browser ini.");
+    try {
+      const currentDescriptor = await extractFaceDescriptor(employeeVideo);
+      const distance = getFaceDescriptorDistance(currentDescriptor, employee.faceDescriptor);
+      if (distance > faceMatchThreshold) {
+        throw new Error("Wajah tidak cocok dengan akun email yang sedang login.");
+      }
+    } catch (error) {
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-expand"></i> Mulai scan';
+      updateScanFeedback("error", "Wajah tidak dikenali", error.message);
+      showToast(`Presensi ditolak: ${error.message}`, "warning");
+      return;
+    }
+    button.disabled = false;
+    button.innerHTML = '<i class="fa-solid fa-expand"></i> Mulai scan';
   }
 
   if (gps && employee) {
@@ -2206,7 +2323,7 @@ async function performScan(useDemo = false) {
     const now = new Date();
     const time = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
     const actionName = scanType === "in" ? "Absen masuk" : "Absen keluar";
-    const attendanceMessage = `${useDemo ? "Presensi simulasi tersimpan di sesi ini." : "Kamera aktif; pencocokan wajah belum terhubung ke layanan verifikasi."} ${locationAssessment.message}`;
+    const attendanceMessage = `${useDemo ? "Simulasi tanpa verifikasi identitas wajah." : `Wajah dikenali sesuai akun ${employee.name}.`} ${locationAssessment.message}`;
     updateScanFeedback("success", `${actionName} berhasil`, attendanceMessage, `${time} WIB`);
     document.getElementById("scanButton").innerHTML = '<i class="fa-solid fa-check"></i> Berhasil';
     if (gps && employee) {

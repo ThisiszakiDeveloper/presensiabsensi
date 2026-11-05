@@ -283,6 +283,12 @@ function findEmployeeByEmail(email) {
   return getAddedEmployees().find((employee) => employee.email?.trim().toLowerCase() === normalizedEmail) || null;
 }
 
+function isValidFaceDescriptor(descriptor) {
+  return Array.isArray(descriptor)
+    && descriptor.length === 128
+    && descriptor.every((value) => Number.isFinite(value));
+}
+
 async function updateEmployeePassword(email, password) {
   const employee = findEmployeeByEmail(email);
   if (!employee) throw new Error("Akun dengan email tersebut tidak ditemukan.");
@@ -312,6 +318,9 @@ function addEmployee(employee) {
   if (typeof employee.faceSample !== "string" || !employee.faceSample.startsWith("data:image/jpeg;base64,")) {
     throw new Error("Foto sampel wajah wajib direkam sebelum akun karyawan dibuat.");
   }
+  if (!isValidFaceDescriptor(employee.faceDescriptor)) {
+    throw new Error("Template wajah tidak valid. Ambil ulang sampel wajah sebelum membuat akun.");
+  }
   const employeeWithoutLegacyId = { ...employee };
   delete employeeWithoutLegacyId[legacyIdentityField];
   const addedEmployees = [...getAddedEmployees(), {
@@ -333,6 +342,13 @@ function updateEmployee(email, updates) {
   }
   const normalizedEmail = updates.email?.trim().toLowerCase() || "";
   if (!normalizedEmail) throw new Error("Email login wajib diisi.");
+  if (updates.faceDescriptor !== undefined && !isValidFaceDescriptor(updates.faceDescriptor)) {
+    throw new Error("Template wajah tidak valid. Ambil ulang sampel wajah.");
+  }
+  if (updates.faceDescriptor !== undefined
+    && (typeof updates.faceSample !== "string" || !updates.faceSample.startsWith("data:image/jpeg;base64,"))) {
+    throw new Error("Foto sampel wajah tidak valid. Ambil ulang sampel wajah.");
+  }
   const duplicateEmail = getEmployees().some((entry) =>
     entry.email !== email && entry.email?.trim().toLowerCase() === normalizedEmail,
   ) || admins.some((admin) => admin.email.trim().toLowerCase() === normalizedEmail);
@@ -344,6 +360,7 @@ function updateEmployee(email, updates) {
     role: updates.role.trim(),
     ownerAdminId: updates.ownerAdminId,
     accountRole: updates.accountRole === "admin" ? "admin" : "employee",
+    ...(updates.faceDescriptor ? { faceDescriptor: updates.faceDescriptor, faceSample: updates.faceSample } : {}),
   };
   const addedEmployees = getAddedEmployees();
   if (addedEmployees.some((entry) => entry.email === email)) {
