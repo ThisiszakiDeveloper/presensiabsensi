@@ -1518,7 +1518,11 @@ function closeSidebar() {
 
 function stopStream(stream, video, stage) {
   if (stream) stream.getTracks().forEach((track) => track.stop());
-  if (video) video.srcObject = null;
+  if (video) {
+    video.srcObject = null;
+    video.style.removeProperty("opacity");
+    video.style.removeProperty("visibility");
+  }
   if (stage) stage.classList.remove("video-active");
 }
 
@@ -1537,6 +1541,14 @@ function stopEmployeeCamera() {
   document.getElementById("cameraStatusText").innerHTML = '<i class="fa-solid fa-circle-info"></i> Menunggu kamera';
 }
 
+async function switchCamera(kind) {
+  const isAdmin = kind === "admin";
+  const select = document.getElementById(isAdmin ? "adminCameraDevice" : "employeeCameraDevice");
+  if (isAdmin) stopAdminCamera();
+  else stopEmployeeCamera();
+  await startCamera(kind, select.value);
+}
+
 function closeExpandedCamera() {
   const stage = document.getElementById("employeeCameraStage");
   stage.classList.remove("is-expanded");
@@ -1546,20 +1558,75 @@ function closeExpandedCamera() {
 }
 
 function waitForVideoFrame(video) {
-  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-    return Promise.resolve();
-  }
   return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      video.removeEventListener("loadeddata", handleLoadedData);
-      reject(new Error("Kamera belum mengirimkan gambar."));
-    }, 5000);
-    function handleLoadedData() {
+    const stream = video.srcObject;
+    let poll = 0;
+    const timeout = window.setTimeout(() => finish(new Error("Kamera tersambung tetapi tidak mengirim gambar. Tutup aplikasi kamera lain, periksa penutup kamera, lalu pilih kamera berbeda jika tersedia.")), 10000);
+    const finish = (error) => {
       window.clearTimeout(timeout);
-      resolve();
-    }
-    video.addEventListener("loadeddata", handleLoadedData, { once: true });
+      window.clearInterval(poll);
+      ["loadeddata", "loadedmetadata", "canplay", "resize"].forEach((eventName) => video.removeEventListener(eventName, checkFrame));
+      stream?.getTracks().forEach((track) => track.removeEventListener("ended", handleTrackEnded));
+      if (error) reject(error);
+      else resolve();
+    };
+    const handleTrackEnded = () => finish(new Error("Kamera terputus sebelum gambar diterima."));
+    stream?.getTracks().forEach((track) => track.addEventListener("ended", handleTrackEnded, { once: true }));
+    const checkFrame = () => {
+      const liveVideoTrack = stream?.getVideoTracks().some((track) => track.readyState === "live");
+      if (!liveVideoTrack) {
+        finish(new Error("Tidak ada kamera aktif yang mengirim gambar."));
+        return;
+      }
+      if (
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+        && video.videoWidth > 0
+        && video.videoHeight > 0
+      ) {
+        finish();
+        return;
+      }
+    };
+    ["loadeddata", "loadedmetadata", "canplay", "resize"].forEach((eventName) => video.addEventListener(eventName, checkFrame));
+    poll = window.setInterval(checkFrame, 100);
+    checkFrame();
   });
+}
+
+function verifyCameraImage(video) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 12;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Browser tidak dapat memeriksa gambar kamera.");
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let brightestPixel = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    brightestPixel = Math.max(brightestPixel, pixels[index], pixels[index + 1], pixels[index + 2]);
+  }
+  if (brightestPixel <= 8) {
+    throw new Error("Kamera aktif tetapi gambarnya hitam. Buka penutup kamera, tutup aplikasi lain yang memakai kamera, atau pilih kamera lain.");
+  }
+}
+
+async function updateCameraPicker(isAdmin, activeDeviceId) {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  const picker = document.getElementById(isAdmin ? "adminCameraPicker" : "employeeCameraPicker");
+  const select = document.getElementById(isAdmin ? "adminCameraDevice" : "employeeCameraDevice");
+  const devices = (await navigator.mediaDevices.enumerateDevices())
+    .filter((device) => device.kind === "videoinput" && device.deviceId);
+  select.replaceChildren();
+  devices.forEach((device, index) => {
+    const option = document.createElement("option");
+    option.value = device.deviceId;
+    option.textContent = device.label || `Kamera ${index + 1}`;
+    select.append(option);
+  });
+  picker.classList.toggle("is-hidden", devices.length < 2);
+  if (activeDeviceId && devices.some((device) => device.deviceId === activeDeviceId)) {
+    select.value = activeDeviceId;
+  }
 }
 
 function loadFaceRecognitionModels() {
@@ -1639,17 +1706,23 @@ function captureAttendanceSelfie() {
   return canvas.toDataURL("image/jpeg", 0.72);
 }
 
-async function startCamera(kind) {
+async function startCamera(kind, requestedDeviceId = "") {
   const isAdmin = kind === "admin";
   const video = isAdmin ? adminVideo : employeeVideo;
   const stage = document.getElementById(isAdmin ? "adminCameraStage" : "employeeCameraStage");
   const button = document.getElementById(isAdmin ? "adminCameraButton" : "employeeCameraButton");
   const setStatus = (message) => {
-    if (!isAdmin) document.getElementById("cameraStatusText").innerHTML = `<i class="fa-solid fa-circle-info"></i> ${escapeHTML(message)}`;
+    if (isAdmin) {
+      const status = document.getElementById("enrollmentStatus");
+      status.textContent = message;
+      status.style.color = "#788b96";
+    } else {
+      document.getElementById("cameraStatusText").innerHTML = `<i class="fa-solid fa-circle-info"></i> ${escapeHTML(message)}`;
+    }
   };
 
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    const message = "Kamera perlu halaman HTTPS atau localhost. Jalankan melalui http://localhost/PresensiSitenexs/";
+    const message = "Kamera memerlukan HTTPS atau localhost. Buka kembali situs melalui alamat HTTPS.";
     setStatus(message);
     showToast(message, "warning");
     return false;
@@ -1657,13 +1730,20 @@ async function startCamera(kind) {
 
   button.disabled = true;
   button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghubungkan';
+  setStatus("Meminta izin dan menghubungkan kamera...");
   let stream = null;
   try {
-    const constraints = { video: { facingMode: { ideal: "user" }, aspectRatio: { ideal: 4 / 3 }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false };
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    const videoConstraints = requestedDeviceId
+      ? { deviceId: { exact: requestedDeviceId } }
+      : { facingMode: { ideal: "user" } };
+    const constraints = { video: videoConstraints, audio: false };
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (error) {
-      if (error.name !== "OverconstrainedError" && error.name !== "ConstraintNotSatisfiedError") throw error;
+      if (requestedDeviceId || (error.name !== "OverconstrainedError" && error.name !== "ConstraintNotSatisfiedError")) throw error;
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     }
     if (isAdmin) {
@@ -1676,27 +1756,44 @@ async function startCamera(kind) {
     video.srcObject = stream;
     await video.play();
     await waitForVideoFrame(video);
+    verifyCameraImage(video);
     if (isAdmin) {
       adminStream = stream;
     } else {
       employeeStream = stream;
+    }
+    const activeDeviceId = requestedDeviceId || stream.getVideoTracks()[0]?.getSettings().deviceId;
+    try {
+      await updateCameraPicker(isAdmin, activeDeviceId);
+    } catch (error) {
+      showToast(`Daftar kamera tidak dapat dimuat: ${error.message}`, "warning");
     }
     stream.getVideoTracks()[0]?.addEventListener("ended", () => {
       if (isAdmin && adminStream === stream) stopAdminCamera();
       if (!isAdmin && employeeStream === stream) stopEmployeeCamera();
     }, { once: true });
     stage.classList.add("video-active");
+    video.style.opacity = "1";
+    video.style.visibility = "visible";
     button.innerHTML = '<i class="fa-solid fa-video-slash"></i> Matikan kamera';
-    if (!isAdmin) setStatus("Kamera aktif, gambar diterima");
-    if (isAdmin) document.getElementById("captureFaceButton").disabled = false;
+    setStatus("Kamera menampilkan gambar. Posisikan wajah di tengah bingkai.");
+    if (isAdmin) {
+      document.getElementById("captureFaceButton").disabled = false;
+    }
     return true;
   } catch (error) {
     stream?.getTracks().forEach((track) => track.stop());
     if (video.srcObject === stream) video.srcObject = null;
+    stage.classList.remove("video-active");
     const messages = {
-      NotAllowedError: "Izin kamera ditolak. Izinkan kamera di pengaturan situs browser.",
-      NotFoundError: "Perangkat kamera tidak ditemukan.",
-      NotReadableError: "Kamera sedang digunakan aplikasi lain.",
+      NotAllowedError: document.permissionsPolicy?.allowsFeature?.("camera") === false
+        ? "Server membatasi akses kamera untuk halaman ini. Izinkan fitur camera pada Permissions-Policy hosting."
+        : "Akses kamera ditolak browser atau sistem operasi. Izinkan kamera pada pengaturan situs dan pengaturan privasi kamera laptop, lalu muat ulang.",
+      PermissionDeniedError: "Akses kamera ditolak browser atau sistem operasi. Izinkan kamera pada pengaturan situs dan pengaturan privasi kamera laptop, lalu muat ulang.",
+      NotFoundError: "Browser tidak menemukan kamera. Sambungkan atau aktifkan kamera di laptop.",
+      DevicesNotFoundError: "Browser tidak menemukan kamera. Sambungkan atau aktifkan kamera di laptop.",
+      NotReadableError: "Kamera sedang dipakai aplikasi lain atau diblokir pengaturan privasi sistem. Tutup aplikasi tersebut lalu coba lagi.",
+      TrackStartError: "Kamera gagal dimulai. Tutup aplikasi lain yang memakai kamera dan periksa pengaturan privasi laptop.",
       AbortError: "Akses kamera terhenti. Coba aktifkan kembali.",
       SecurityError: "Browser memblokir kamera. Gunakan HTTPS atau localhost.",
       OverconstrainedError: "Kamera tidak mendukung pengaturan yang diminta.",
@@ -2804,8 +2901,18 @@ taskBoard.addEventListener("drop", (event) => {
 });
 document.getElementById("newEmployeeDivision").addEventListener("change", updateCustomDivisionField);
 document.getElementById("captureFaceButton").addEventListener("click", captureFaceSample);
-document.getElementById("adminCameraButton").addEventListener("click", () => adminStream ? stopAdminCamera() : startCamera("admin"));
+document.getElementById("adminCameraButton").addEventListener("click", () => {
+  if (adminStream) {
+    stopAdminCamera();
+    document.getElementById("enrollmentStatus").textContent = "Kamera dimatikan";
+    document.getElementById("enrollmentStatus").style.color = "";
+  } else {
+    startCamera("admin");
+  }
+});
 document.getElementById("employeeCameraButton").addEventListener("click", () => employeeStream ? stopEmployeeCamera() : startCamera("employee"));
+document.getElementById("adminCameraDevice").addEventListener("change", () => switchCamera("admin"));
+document.getElementById("employeeCameraDevice").addEventListener("change", () => switchCamera("employee"));
 document.getElementById("cameraExpandClose").addEventListener("click", closeExpandedCamera);
 document.getElementById("scanButton").addEventListener("click", () => performScan(false));
 document.getElementById("demoScanButton").addEventListener("click", () => performScan(true));
